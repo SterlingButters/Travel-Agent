@@ -17,8 +17,6 @@ import numpy as np
 import math
 import json
 
-google_maps_api_key = 'AIzaSyADqTN41qbXA1NP2rI9iPlX2iMqaym9MUU'
-mapbox_access_token = 'pk.eyJ1Ijoic3RlcmxpbmdidXR0ZXJzIiwiYSI6ImNqc2NpaGRmbDAyYW4zeXFvcnhta3B0cTcifQ.uMj945yDsM8MF1sCVTJ6sg'
 gmaps = googlemaps.Client(key=google_maps_api_key)
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
