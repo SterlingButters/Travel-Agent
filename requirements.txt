@@ -1,0 +1,12 @@
+plotly
+dash_html_components
+dash_core_components
+dash_daq
+dash-renderer
+dash
+googlemaps
+polyline
+numpy
+geographiclib
+forecastiopy
+gunicorn

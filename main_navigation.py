@@ -1,9 +1,7 @@
 # https://console.cloud.google.com/google/maps-apis/api-list?project=travelagent-1550711664727&consoleReturnUrl=https:%2F%2Fcloud.google.com%2Fmaps-platform%2F%3Fapis%3Dmaps,routes,places%26project%3Dtravelagent-1550711664727&consoleUI=CLOUD
 # https://studio.mapbox.com/styles/sterlingbutters/cjscjbxk00coa1fpao22j7j5o/edit/
-# https://stackoverflow.com/questions/40877840/google-maps-api-draw-a-route-using-points-of-a-polyline
-# 9MUU
+# https://geographiclib.sourceforge.io/1.49/python/code.html#geographiclib.polygonarea.PolygonArea.Compute
 
-import plotly.plotly as py
 import plotly.graph_objs as go
 import dash_html_components as html
 import dash_core_components as dcc
@@ -14,15 +12,21 @@ from dash.dependencies import Output, State, Input
 import googlemaps
 import polyline
 import numpy as np
-import math
-import json
 from geographiclib.geodesic import Geodesic
+from forecastiopy import *
+import json
+
+
+google_maps_api_key = 'AIzaSyADqTN41qbXA1NP2rI9iPlX2iMqaym9MUU'
+darksky_api_key = '163bc202ba47de2514c47f63f1872dd7'
+mapbox_access_token = 'pk.eyJ1Ijoic3RlcmxpbmdidXR0ZXJzIiwiYSI6ImNqc2NpaGRmbDAyYW4zeXFvcnhta3B0cTcifQ.uMj945yDsM8MF1sCVTJ6sg'
 
 gmaps = googlemaps.Client(key=google_maps_api_key)
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 app = dash.Dash(external_stylesheets=external_stylesheets)
+server = app.server
 app.config['suppress_callback_exceptions'] = True
 
 #######################################################################################################################
@@ -134,8 +138,16 @@ app.layout = html.Div([
 
 #######################################################################################################################
 
-
+# TODO: Create Class
 def get_route(address_start, address_end):
+    """
+    :param address_start: User-readable text address for lat/lon encoding
+    :param address_end: User-readable text address for lat/lon encoding
+    :returns: path: List of lat/long pairs along navigation trajectory between
+              address_start and address_end
+              waypoints: List of lat/long pairs that represent a navigation inflection
+              instructions: List of html instructions that describe the points of inflection
+    """
     if address_start and address_end:
 
         address_start = gmaps.geocode(address_start)[0]['geometry']['location']
@@ -181,15 +193,37 @@ def get_route(address_start, address_end):
 
 
 def get_bearing(lat1, lat2, long1, long2):
+    """
+    :param lat1: Origin Latitude
+    :param lat2: Destination Latitude
+    :param long1: Origin Longitude
+    :param long2: Destination Longitude
+    :return: Bearing from lat1/lon1 pair to lat2/lon2 pair
+    """
     brng = Geodesic.WGS84.Inverse(lat1, long1, lat2, long2)['azi1']
     return brng
 
 
-def create_gridpoints(lat1, lat2, long1, long2, n=25, m=25):
+def create_gridpoints(lat1, lat2, long1, long2, n=50, m=25, miles=150):
+    """
+    :param lat1: Origin Latitude
+    :param lat2: Destination Latitude
+    :param long1: Origin Longitude
+    :param long2: Destination Longitude
+    :param n: Number of gridpoints between origin and destination
+    :param m: Number of gridpoints on each side of straight-line trajectory between
+           origin and destination
+    :param miles: Number of miles for deviation from straight-line trajectory
+           between origin and destination
+    :return: Gridpoints between origin and destination in accordance with params
+    """
+
     brng = Geodesic.WGS84.Inverse(lat1, long1, lat2, long2)['azi1']
     Tdist = Geodesic.WGS84.Inverse(lat1, long1, lat2, long2)['s12']
 
-    dist = Tdist/n
+    meters = miles*1609.334
+    path_dist = Tdist/n
+    lateral_dist = meters/m
 
     # Get list of m evenly spaced lat/lon pairs "above" and "below" origin-destination straight-line
     upper = brng + 90
@@ -201,12 +235,12 @@ def create_gridpoints(lat1, lat2, long1, long2, n=25, m=25):
     lon_u = lon_l = long1
     for i in range(m):
         u_origin_base.append((lat_u, lon_u))
-        lat_u = Geodesic.WGS84.Direct(lat_u, lon_u, upper, dist)['lat2']
-        lon_u = Geodesic.WGS84.Direct(lat_u, lon_u, upper, dist)['lon2']
+        lat_u = Geodesic.WGS84.Direct(lat_u, lon_u, upper, lateral_dist)['lat2']
+        lon_u = Geodesic.WGS84.Direct(lat_u, lon_u, upper, lateral_dist)['lon2']
 
         l_origin_base.append((lat_l, lon_l))
-        lat_l = Geodesic.WGS84.Direct(lat_l, lon_l, lower, dist)['lat2']
-        lon_l = Geodesic.WGS84.Direct(lat_l, lon_l, lower, dist)['lon2']
+        lat_l = Geodesic.WGS84.Direct(lat_l, lon_l, lower, lateral_dist)['lat2']
+        lon_l = Geodesic.WGS84.Direct(lat_l, lon_l, lower, lateral_dist)['lon2']
 
     origin_base = []
     origin_base.extend(l_origin_base[::-1])
@@ -217,15 +251,32 @@ def create_gridpoints(lat1, lat2, long1, long2, n=25, m=25):
     for k in range(len(origin_base)):
         lat = origin_base[k][0]
         lon = origin_base[k][1]
-        for j in range(n):
-            lat = Geodesic.WGS84.Direct(lat, lon, brng, dist)['lat2']
-            lon = Geodesic.WGS84.Direct(lat, lon, brng, dist)['lon2']
+        for j in range(n+1):
             length_base.append((lat, lon))
-
-    print(len(length_base))
-    print(length_base)
+            lat = Geodesic.WGS84.Direct(lat, lon, brng, path_dist)['lat2']
+            lon = Geodesic.WGS84.Direct(lat, lon, brng, path_dist)['lon2']
 
     return length_base
+
+
+def get_weather(gridpts):
+    print(gridpts)
+    if gridpts:
+        probs = []
+        for i in range(len(gridpts)):
+            client = ForecastIO.ForecastIO(darksky_api_key,
+                                           latitude=float(gridpts[i][0]),
+                                           longitude=float(gridpts[i][1]),
+                                           units='us')
+
+            if client.has_hourly() is True:
+                hourly = FIOHourly.FIOHourly(client)
+                probs.append(float(hourly.get_hour(1)['precipProbability']))
+                print(float(hourly.get_hour(1)['precipProbability']))
+            else:
+                probs.append(None)
+
+        return probs
 
 #######################################################################################################################
 
@@ -388,7 +439,9 @@ def on_data(ts, pov_view, location, bearing, pitch, zoom, data):
         mode='markers',
         text='',
         hoverinfo='all',
-        marker=dict(size=3),
+        marker=dict(size=3,
+                    # color=get_weather(weatherpts)
+                    ),
     )
 
     if location:
