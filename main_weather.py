@@ -20,6 +20,7 @@ import tzlocal
 gmaps = googlemaps.Client(key=google_maps_api_key)
 
 
+# TODO Write as Class
 def get_route(address_start='Houston, TX', address_end='Austin, TX'):
     if address_start and address_end:
 
@@ -77,7 +78,7 @@ new_lats = []
 new_longs = []
 probs = []
 
-
+# https://gis.stackexchange.com/questions/142326/calculating-longitude-length-in-miles
 
 print(len(path))
 

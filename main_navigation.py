@@ -16,6 +16,7 @@ import polyline
 import numpy as np
 import math
 import json
+from geographiclib.geodesic import Geodesic
 
 gmaps = googlemaps.Client(key=google_maps_api_key)
 
@@ -31,7 +32,7 @@ app.layout = html.Div([
 
     html.Div([
         html.Div([dcc.Input(id='from-location', placeholder='Starting Location', size=50, style=dict(height=30),
-                            value='Austin, TX')],
+                            value='me')],
                  style=dict(
                      width='0%',
                      display='table-cell',
@@ -122,10 +123,10 @@ app.layout = html.Div([
     html.Div([
         html.P('Trip Progress:'),
         dcc.Slider(id='current-location', updatemode='drag', value=0, included=True, min=0, max=1000,
-               marks={
-                    0: {'label': 'Journey Start', 'style': {'color': '#77b0b1'}},
-                 1000: {'label': 'Journey End', 'style': {'color': '#77b0b1'}},
-               }),
+                   marks={
+                       0: {'label': 'Journey Start', 'style': {'color': '#77b0b1'}},
+                       1000: {'label': 'Journey End', 'style': {'color': '#77b0b1'}},
+                   }),
         daq.BooleanSwitch(id='active-view', on=False, label='Reorient')
     ]),
 ])
@@ -179,21 +180,52 @@ def get_route(address_start, address_end):
         return path, waypoints, instructions
 
 
-def get_bearing(lat1, long1, lat2, long2):
-    dLon = (long2 - long1)
-
-    y = math.sin(dLon) * math.cos(lat2)
-    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dLon)
-
-    brng = math.atan2(y, x)
-
-    brng = math.degrees(brng)
-    print(brng)
-    # brng = (brng + 360) % 360
-    # brng = 360 - brng   # count degrees clockwise - remove to make counter-clockwise
-
+def get_bearing(lat1, lat2, long1, long2):
+    brng = Geodesic.WGS84.Inverse(lat1, long1, lat2, long2)['azi1']
     return brng
 
+
+def create_gridpoints(lat1, lat2, long1, long2, n=25, m=25):
+    brng = Geodesic.WGS84.Inverse(lat1, long1, lat2, long2)['azi1']
+    Tdist = Geodesic.WGS84.Inverse(lat1, long1, lat2, long2)['s12']
+
+    dist = Tdist/n
+
+    # Get list of m evenly spaced lat/lon pairs "above" and "below" origin-destination straight-line
+    upper = brng + 90
+    lower = brng - 90
+    u_origin_base = []
+    l_origin_base = []
+
+    lat_u = lat_l = lat1
+    lon_u = lon_l = long1
+    for i in range(m):
+        u_origin_base.append((lat_u, lon_u))
+        lat_u = Geodesic.WGS84.Direct(lat_u, lon_u, upper, dist)['lat2']
+        lon_u = Geodesic.WGS84.Direct(lat_u, lon_u, upper, dist)['lon2']
+
+        l_origin_base.append((lat_l, lon_l))
+        lat_l = Geodesic.WGS84.Direct(lat_l, lon_l, lower, dist)['lat2']
+        lon_l = Geodesic.WGS84.Direct(lat_l, lon_l, lower, dist)['lon2']
+
+    origin_base = []
+    origin_base.extend(l_origin_base[::-1])
+    origin_base.extend(u_origin_base)
+
+    # Get list of n evenly spaced lat/lon pairs between origin and destination
+    length_base = []
+    for k in range(len(origin_base)):
+        lat = origin_base[k][0]
+        lon = origin_base[k][1]
+        for j in range(n):
+            lat = Geodesic.WGS84.Direct(lat, lon, brng, dist)['lat2']
+            lon = Geodesic.WGS84.Direct(lat, lon, brng, dist)['lon2']
+            length_base.append((lat, lon))
+
+    print(len(length_base))
+    print(length_base)
+
+    return length_base
 
 #######################################################################################################################
 
@@ -246,9 +278,9 @@ def define_bearing(ts, pov_view, location, bearing_state, data):
     path = data['path'] if data else []
 
     if pov_view:
-        lat1 = path[int(len(path) * location / 1000) - 1][0]
+        lat1 = path[int(len(path) * location / 1000)][0]
         lat2 = path[int(len(path) * location / 1000) + 1][0]
-        lng1 = path[int(len(path) * location / 1000) - 1][1]
+        lng1 = path[int(len(path) * location / 1000)][1]
         lng2 = path[int(len(path) * location / 1000) + 1][1]
         bearing = get_bearing(lat1, lat2, lng1, lng2)
         return bearing
@@ -305,7 +337,7 @@ def define_zoom(pov_view, zoom_state):
 def store_directions(click, address_start, address_end, data):
     if click:
         # Give a default data dict with empty lists if there's no data.
-        data = data or {'path': [], 'waypoints': [], 'instructions': []}
+        data = data or {'path': [], 'waypoints': [], 'instructions': [], 'weather': []}
 
         data['path'], data['waypoints'], data['instructions'] = get_route(address_start, address_end)
 
@@ -329,6 +361,8 @@ def on_data(ts, pov_view, location, bearing, pitch, zoom, data):
     waypoints = data['waypoints'] if data else []
     instructions = data['instructions'] if data else []
 
+    weatherpts = create_gridpoints(lat1=path[0][0], lat2=path[-1][0], long1=path[0][1], long2=path[-1][1]) if data else []
+
     path_plot = go.Scattermapbox(
         lat=[item_x[0] for item_x in path],
         lon=[item_y[1] for item_y in path],
@@ -347,6 +381,16 @@ def on_data(ts, pov_view, location, bearing, pitch, zoom, data):
         marker=dict(size=[8] + [5 for j in range(len(waypoints) - 2)] + [8]),
     )
 
+    weather_plot = go.Scattermapbox(
+        lat=[item_x[0] for item_x in weatherpts],
+        lon=[item_y[1] for item_y in weatherpts],
+        name='Weather',
+        mode='markers',
+        text='',
+        hoverinfo='all',
+        marker=dict(size=3),
+    )
+
     if location:
         location_plot = go.Scattermapbox(
             lat=[path[int(len(path) * location / 1000)][0]],
@@ -360,10 +404,10 @@ def on_data(ts, pov_view, location, bearing, pitch, zoom, data):
                         ),
         )
 
-        data = [path_plot, waypoint_plot, location_plot]
+        data = [path_plot, waypoint_plot, weather_plot, location_plot]
 
     else:
-        data = [path_plot, waypoint_plot]
+        data = [path_plot, waypoint_plot, weather_plot]
 
     if not pov_view and not location:
         center = dict(lat=np.mean([float(step[0]) for step in path]),
