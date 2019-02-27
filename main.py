@@ -17,10 +17,6 @@ from forecastiopy import *
 import json
 
 
-google_maps_api_key = 'AIzaSyADqTN41qbXA1NP2rI9iPlX2iMqaym9MUU'
-darksky_api_key = '163bc202ba47de2514c47f63f1872dd7'
-mapbox_access_token = 'pk.eyJ1Ijoic3RlcmxpbmdidXR0ZXJzIiwiYSI6ImNqc2NpaGRmbDAyYW4zeXFvcnhta3B0cTcifQ.uMj945yDsM8MF1sCVTJ6sg'
-
 gmaps = googlemaps.Client(key=google_maps_api_key)
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -35,7 +31,7 @@ app.layout = html.Div([
 
     html.Div([
         html.Div([dcc.Input(id='from-location', placeholder='Starting Location', size=50, style=dict(height=30),
-                            value='me')],
+                            value='Austin, TX')], # or 'me'
                  style=dict(
                      width='0%',
                      display='table-cell',
@@ -203,7 +199,7 @@ def get_bearing(lat1, lat2, long1, long2):
     return brng
 
 
-def create_gridpoints(lat1, lat2, long1, long2, n=50, m=25, miles=150):
+def create_gridpoints(lat1, lat2, long1, long2, n=50, m=25, miles=50):
     """
     :param lat1: Origin Latitude
     :param lat2: Destination Latitude
@@ -259,7 +255,6 @@ def create_gridpoints(lat1, lat2, long1, long2, n=50, m=25, miles=150):
 
 
 def get_weather(gridpts):
-    print(gridpts)
     if gridpts:
         probs = []
         for i in range(len(gridpts)):
@@ -271,7 +266,7 @@ def get_weather(gridpts):
             if client.has_hourly() is True:
                 hourly = FIOHourly.FIOHourly(client)
                 probs.append(float(hourly.get_hour(1)['precipProbability']))
-                print(float(hourly.get_hour(1)['precipProbability']))
+                print('{}/{} Prob: {}'.format(i, len(gridpts), float(hourly.get_hour(1)['precipProbability'])))
             else:
                 probs.append(None)
 
@@ -412,6 +407,8 @@ def on_data(ts, pov_view, location, bearing, pitch, zoom, data):
     instructions = data['instructions'] if data else []
 
     weatherpts = create_gridpoints(lat1=path[0][0], lat2=path[-1][0], long1=path[0][1], long2=path[-1][1]) if data else []
+    weathervals = get_weather(weatherpts)
+    print(weathervals)
 
     path_plot = go.Scattermapbox(
         lat=[item_x[0] for item_x in path],
@@ -436,10 +433,11 @@ def on_data(ts, pov_view, location, bearing, pitch, zoom, data):
         lon=[item_y[1] for item_y in weatherpts],
         name='Weather',
         mode='markers',
-        text='',
+        text=['Probability of Precipitation: {}'.format(item) for item in weathervals],
         hoverinfo='all',
-        marker=dict(size=3,
-                    # color=get_weather(weatherpts)
+        marker=dict(size=5,
+                    color=weathervals,
+                    opacity=.7,
                     ),
     )
 

@@ -1,25 +1,12 @@
 import plotly.plotly as py
 import plotly.graph_objs as go
-import dash_html_components as html
-import dash_core_components as dcc
-import dash_daq as daq
-import dash
-from dash.exceptions import PreventUpdate
-from dash.dependencies import Output, State, Input
 import googlemaps
 import polyline
-import numpy as np
-import math
-import json
-
-
 from forecastiopy import *
-from datetime import datetime
 import tzlocal
-
-google_maps_api_key = 'AIzaSyADqTN41qbXA1NP2rI9iPlX2iMqaym9MUU'
-darksky_api_key = '163bc202ba47de2514c47f63f1872dd7'
-mapbox_access_token = 'pk.eyJ1Ijoic3RlcmxpbmdidXR0ZXJzIiwiYSI6ImNqc2NpaGRmbDAyYW4zeXFvcnhta3B0cTcifQ.uMj945yDsM8MF1sCVTJ6sg'
+from datetime import datetime
+import numpy as np
+import json
 
 gmaps = googlemaps.Client(key=google_maps_api_key)
 
