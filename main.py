@@ -16,7 +16,6 @@ from geographiclib.geodesic import Geodesic
 from forecastiopy import *
 import json
 
-
 gmaps = googlemaps.Client(key=google_maps_api_key)
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']

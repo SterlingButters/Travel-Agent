@@ -3,6 +3,8 @@
 The purpose of this project is to showcase the simultaneous implementation of some 
 much desired navigation features of many applications that provide this service.
 
+![alt text](https://github.com/SterlingButters/Travel-Agent/blob/master/misc/WeatherExample.png)
+
 #### Example Features:
 - Weather Prediction
 - Light/Dark Prediction
